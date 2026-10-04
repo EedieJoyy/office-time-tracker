@@ -1,0 +1,24 @@
+{
+  "name": "office-time-tracker",
+  "version": "1.0.0",
+  "description": "Office Time In/Out Tracking Web Application",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "seed": "node seed.js"
+  },
+  "keywords": ["attendance", "time-tracker", "office"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@libsql/client": "^0.14.0",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

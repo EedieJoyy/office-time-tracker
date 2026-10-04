@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Records — Time Tracker</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">⏱️ Time Tracker</div>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/records.html" class="active">My Records</a>
+      <a href="/admin.html">Admin</a>
+      <button id="themeToggle">🌙</button>
+    </div>
+  </nav>
+
+  <main class="container">
+    <div class="card">
+      <h2>My Attendance Records</h2>
+      <div class="filters">
+        <input type="text" id="filterEmpId" placeholder="Employee ID (e.g. EMP001)" />
+        <input type="date" id="filterFrom" />
+        <input type="date" id="filterTo" />
+        <button id="loadRecordsBtn" class="btn btn-primary">🔍 Load</button>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="recordsTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Time In</th>
+              <th>Time Out</th>
+              <th>Total Hours</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="recordsBody">
+            <tr><td colspan="5" class="empty">Enter your Employee ID and click Load.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById('loadRecordsBtn').addEventListener('click', loadMyRecords);
+
+    async function loadMyRecords() {
+      const id = document.getElementById('filterEmpId').value.trim();
+      if (!id) return showToast('Please enter your Employee ID.', 'error');
+
+      const from = document.getElementById('filterFrom').value;
+      const to = document.getElementById('filterTo').value;
+      let url = `/api/records/${id}`;
+      const qs = [];
+      if (from) qs.push(`from=${from}`);
+      if (to) qs.push(`to=${to}`);
+      if (qs.length) url += '?' + qs.join('&');
+
+      const res = await fetch(url);
+      const rows = await res.json();
+      const body = document.getElementById('recordsBody');
+
+      if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="5" class="empty">No records found.</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = rows.map(r => `
+        <tr>
+          <td>${r.date}</td>
+          <td>${formatTime(r.time_in)}</td>
+          <td>${formatTime(r.time_out)}</td>
+          <td>${r.total_hours || 0} hrs</td>
+          <td><span class="badge badge-${r.status.toLowerCase().replace(' ','-')}">${r.status}</span></td>
+        </tr>
+      `).join('');
+    }
+  </script>
+</body>
+</html>

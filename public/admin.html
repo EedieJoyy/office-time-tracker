@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Time Tracker</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">⏱️ Time Tracker</div>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/records.html">My Records</a>
+      <a href="/admin.html" class="active">Admin</a>
+      <button id="themeToggle">🌙</button>
+    </div>
+  </nav>
+
+  <main class="container">
+    <!-- ── ATTENDANCE RECORDS ── -->
+    <div class="card">
+      <h2>📊 Attendance Records</h2>
+      <div class="filters">
+        <input type="text" id="adminEmpId" placeholder="Filter by Employee ID" />
+        <input type="date" id="adminFrom" />
+        <input type="date" id="adminTo" />
+        <button id="loadAllBtn" class="btn btn-primary">🔍 Load</button>
+        <button id="exportCsvBtn" class="btn btn-secondary">⬇️ Export CSV</button>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Emp ID</th><th>Name</th><th>Dept</th><th>Date</th>
+              <th>In</th><th>Out</th><th>Hours</th><th>Status</th><th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="adminBody">
+            <tr><td colspan="9" class="empty">Click "Load" to view records.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── EMPLOYEES & SCHEDULES ── -->
+    <div class="card">
+      <h2>👥 Employees & Schedules</h2>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Emp ID</th><th>Name</th><th>Dept</th>
+              <th>Work Days</th><th>Shift</th><th>Grace</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="empBody">
+            <tr><td colspan="7" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── ADD / EDIT EMPLOYEE ── -->
+    <div class="card">
+      <h2 id="formTitle">➕ Add Employee</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Employee ID</label>
+          <input type="text" id="newEmpId" placeholder="EMP005" />
+        </div>
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" id="newEmpName" placeholder="Full Name" />
+        </div>
+        <div class="form-group">
+          <label>Department</label>
+          <input type="text" id="newEmpDept" placeholder="e.g. IT" />
+        </div>
+        <div class="form-group">
+          <label>Shift Start</label>
+          <input type="time" id="newShiftStart" value="09:00" />
+        </div>
+        <div class="form-group">
+          <label>Shift End</label>
+          <input type="time" id="newShiftEnd" value="18:00" />
+        </div>
+        <div class="form-group">
+          <label>Grace (minutes)</label>
+          <input type="number" id="newGrace" value="15" min="0" max="120" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Work Days</label>
+        <div class="days-row">
+          <label class="day-chip"><input type="checkbox" value="1" checked><span>Mon</span></label>
+          <label class="day-chip"><input type="checkbox" value="2" checked><span>Tue</span></label>
+          <label class="day-chip"><input type="checkbox" value="3" checked><span>Wed</span></label>
+          <label class="day-chip"><input type="checkbox" value="4" checked><span>Thu</span></label>
+          <label class="day-chip"><input type="checkbox" value="5" checked><span>Fri</span></label>
+          <label class="day-chip"><input type="checkbox" value="6"><span>Sat</span></label>
+          <label class="day-chip"><input type="checkbox" value="7"><span>Sun</span></label>
+        </div>
+      </div>
+
+      <div class="button-row">
+        <button id="saveEmpBtn" class="btn btn-primary">💾 Save Employee</button>
+        <button id="cancelEditBtn" class="btn btn-secondary" style="display:none;">✖ Cancel</button>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <script src="/js/app.js"></script>
+  <script>
+    const DAY_NAMES = {1:'Mon',2:'Tue',3:'Wed',4:'Thu',5:'Fri',6:'Sat',7:'Sun'};
+    let editingId = null;
+
+    // ── Load Attendance ──
+    document.getElementById('loadAllBtn').addEventListener('click', loadAll);
+    document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
+
+    async function loadAll() {
+      const id = document.getElementById('adminEmpId').value.trim();
+      const from = document.getElementById('adminFrom').value;
+      const to = document.getElementById('adminTo').value;
+      const qs = [];
+      if (id) qs.push(`employee_id=${id}`);
+      if (from) qs.push(`from=${from}`);
+      if (to) qs.push(`to=${to}`);
+      const url = '/api/records' + (qs.length ? '?' + qs.join('&') : '');
+
+      const res = await fetch(url);
+      const rows = await res.json();
+      const body = document.getElementById('adminBody');
+
+      if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="9" class="empty">No records found.</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = rows.map(r => `
+        <tr>
+          <td>${r.employee_id}</td>
+          <td>${r.name || '-'}</td>
+          <td>${r.department || '-'}</td>
+          <td>${r.date}</td>
+          <td>${formatTime(r.time_in)}</td>
+          <td>${formatTime(r.time_out)}</td>
+          <td>${r.total_hours || 0}</td>
+          <td><span class="badge badge-${r.status.toLowerCase().replace(' ','-')}">${r.status}</span></td>
+          <td class="notes-cell">${r.notes || ''}</td>
+        </tr>
+      `).join('');
+    }
+
+    function exportCsv() {
+      const from = document.getElementById('adminFrom').value;
+      const to = document.getElementById('adminTo').value;
+      const qs = [];
+      if (from) qs.push(`from=${from}`);
+      if (to) qs.push(`to=${to}`);
+      window.location.href = '/api/export/csv' + (qs.length ? '?' + qs.join('&') : '');
+    }
+
+    // ── Load Employees ──
+    async function loadEmployees() {
+      const res = await fetch('/api/employees');
+      const rows = await res.json();
+      const body = document.getElementById('empBody');
+
+      if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="7" class="empty">No employees yet.</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = rows.map(e => {
+        const days = (e.work_days || '').split(',').map(d => DAY_NAMES[d] || d).join(' · ');
+        return `
+          <tr>
+            <td>${e.employee_id}</td>
+            <td>${e.name}</td>
+            <td>${e.department || '-'}</td>
+            <td>${days}</td>
+            <td>${e.shift_start} – ${e.shift_end}</td>
+            <td>${e.grace_minutes} min</td>
+            <td class="actions">
+              <button class="btn-xs btn-edit" onclick='editEmployee(${JSON.stringify(e)})'>✏️ Edit</button>
+              <button class="btn-xs btn-delete" onclick="deleteEmployee('${e.employee_id}')">🗑️</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ── Add / Edit Save ──
+    document.getElementById('saveEmpBtn').addEventListener('click', saveEmployee);
+    document.getElementById('cancelEditBtn').addEventListener('click', resetForm);
+
+    function getCheckedDays() {
+      return Array.from(document.querySelectorAll('.day-chip input:checked'))
+        .map(c => c.value).join(',');
+    }
+
+    function setCheckedDays(str) {
+      const arr = (str || '').split(',');
+      document.querySelectorAll('.day-chip input').forEach(c => {
+        c.checked = arr.includes(c.value);
+      });
+    }
+
+    async function saveEmployee() {
+      const payload = {
+        employee_id: document.getElementById('newEmpId').value.trim(),
+        name: document.getElementById('newEmpName').value.trim(),
+        department: document.getElementById('newEmpDept').value.trim(),
+        shift_start: document.getElementById('newShiftStart').value,
+        shift_end: document.getElementById('newShiftEnd').value,
+        grace_minutes: parseInt(document.getElementById('newGrace').value, 10),
+        work_days: getCheckedDays()
+      };
+
+      if (!payload.employee_id || !payload.name) {
+        return showToast('ID and Name are required.', 'error');
+      }
+      if (!payload.work_days) {
+        return showToast('Select at least one work day.', 'error');
+      }
+
+      const isEdit = editingId !== null;
+      const url = isEdit ? `/api/employees/${editingId}` : '/api/employees';
+      const method = isEdit ? 'PUT' : 'POST';
+      const body = { ...payload };
+      if (isEdit) delete body.employee_id; // ID can't change
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast(isEdit ? 'Employee updated!' : 'Employee added!', 'success');
+        resetForm();
+        loadEmployees();
+      } else {
+        showToast(data.error || 'Failed.', 'error');
+      }
+    }
+
+    function editEmployee(e) {
+      editingId = e.employee_id;
+      document.getElementById('formTitle').textContent = `✏️ Edit: ${e.name}`;
+      document.getElementById('newEmpId').value = e.employee_id;
+      document.getElementById('newEmpId').disabled = true;
+      document.getElementById('newEmpName').value = e.name;
+      document.getElementById('newEmpDept').value = e.department || '';
+      document.getElementById('newShiftStart').value = e.shift_start || '09:00';
+      document.getElementById('newShiftEnd').value = e.shift_end || '18:00';
+      document.getElementById('newGrace').value = e.grace_minutes ?? 15;
+      setCheckedDays(e.work_days);
+      document.getElementById('cancelEditBtn').style.display = 'inline-block';
+      document.getElementById('formTitle').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function resetForm() {
+      editingId = null;
+      document.getElementById('formTitle').textContent = '➕ Add Employee';
+      document.getElementById('newEmpId').value = '';
+      document.getElementById('newEmpId').disabled = false;
+      document.getElementById('newEmpName').value = '';
+      document.getElementById('newEmpDept').value = '';
+      document.getElementById('newShiftStart').value = '09:00';
+      document.getElementById('newShiftEnd').value = '18:00';
+      document.getElementById('newGrace').value = 15;
+      setCheckedDays('1,2,3,4,5');
+      document.getElementById('cancelEditBtn').style.display = 'none';
+    }
+
+    async function deleteEmployee(id) {
+      if (!confirm(`Delete employee ${id}? This does NOT remove their attendance history.`)) return;
+      const res = await fetch(`/api/employees/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Employee deleted.', 'success');
+        loadEmployees();
+      } else {
+        showToast(data.error || 'Failed.', 'error');
+      }
+    }
+
+    // ── Init ──
+    window.addEventListener('DOMContentLoaded', () => {
+      loadAll();
+      loadEmployees();
+    });
+  </script>
+</body>
+</html>
